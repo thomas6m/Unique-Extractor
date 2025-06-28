@@ -116,16 +116,16 @@ Output file name: contacts_apac.csv
 
 
 🔧 Command-Line Arguments
-Flag				Description
---input	(Required) 	Path to the input CSV file
---output			Output CSV path (optional)
+Flag				      Description
+--input	          (Required) 	Path to the input CSV file
+--output			    Output CSV path (optional)
 --unique-field		Column to extract unique values from
---row-format		single or multi (default = single)
---separator			Separator for single-row values (default = ;)
---column-name		Custom name for output column
---delimiter			Input CSV delimiter (default = ,)
---verbose			Enable debug-level logging
-filters	Field=value1,value2,... (space-separated)
+--row-format		  single or multi (default = single)
+--separator			  Separator for single-row values (default = ;)
+--column-name		  Custom name for output column
+--delimiter			  Input CSV delimiter (default = ,)
+--verbose			    Enable debug-level logging
+filters	          Field=value1,value2,... (space-separated)
 
 📤 Output Modes
 🔹 Single-row Output (--row-format single)
