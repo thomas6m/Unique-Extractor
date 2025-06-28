@@ -180,6 +180,8 @@ region,clustername,contact_ids
 apac,apacgcb0001d,"abc123, def456"
 emea,emeagcb0002d,"xyz789"
 apac,apacgcb0001d,"def456"
+
+
 Example Command:
 
 python extract_unique_values.py --input sample.csv --unique-field contact_ids region=apac
