@@ -26,12 +26,12 @@ Overview
 This script allows you to extract unique values from various data files (CSV, JSON, YAML, or Parquet) based on user-defined filters. It then allows you to save the results in different formats, such as CSV, JSON, YAML, or Parquet.
 
 Features
-Input formats supported		: CSV, JSON, YAML, Parquet
-Filter support				: Apply filters based on fields and their unique values
-Output formats supported	: CSV, JSON, YAML, Parquet
+Input formats supported		  : CSV, JSON, YAML, Parquet
+Filter support				      : Apply filters based on fields and their unique values
+Output formats supported	  : CSV, JSON, YAML, Parquet
 Flexible separator support	: Use a custom separator for CSV output
-Custom column names			: Define a custom column name for the output
-Row format options			: Choose between single-row or multi-row output formats
+Custom column names			    : Define a custom column name for the output
+Row format options			    : Choose between single-row or multi-row output formats
 
 Requirements
 
@@ -49,15 +49,15 @@ python extract_unique_values.py --input <input_file> [options] <filters>
 
 Input Parameters:
 
---input <input_file>		: Path to the input file (CSV, JSON, YAML, or Parquet).
---output <output_file>		: (Optional) Path to the output file.
---unique-field <field>		: (Optional) Name of the field to extract unique values from.
---separator <separator>		: (Optional) Custom separator for single-row output (default is ;).
+--input <input_file>		    : Path to the input file (CSV, JSON, YAML, or Parquet).
+--output <output_file>		  : (Optional) Path to the output file.
+--unique-field <field>		  : (Optional) Name of the field to extract unique values from.
+--separator <separator>		  : (Optional) Custom separator for single-row output (default is ;).
 --column-name <column_name>	: (Optional) Custom column name for the output (default is unique_<unique_field>).
 --row-format <single|multi>	: (Optional) Row format: single or multi (default is single).
---delimiter <delimiter>		: (Optional) CSV delimiter (default is ,).
---verbose					: (Optional) Enable verbose logging.
-<filters>					: (Optional) Filters in format field=value1,value2,.... Multiple filters can be passed.
+--delimiter <delimiter>		  : (Optional) CSV delimiter (default is ,).
+--verbose					          : (Optional) Enable verbose logging.
+<filters>					          : (Optional) Filters in format field=value1,value2,.... Multiple filters can be passed.
 
 Example:
 
