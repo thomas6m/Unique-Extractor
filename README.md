@@ -1,6 +1,6 @@
-# 📊 Unique Fields Extractor
+# 📊 Unique Value Extractor
 
-A Python CLI tool to extract **unique fields** from datasets in **CSV, JSON, YAML, or Parquet** formats. Supports **interactive filtering**, **custom output formats**, and flexible **row/column layouts**.
+A Python CLI tool to extract **unique values** from datasets in **CSV, JSON, YAML, or Parquet** formats. Supports **interactive filtering**, **custom output formats**, and flexible **row/column layouts**.
 
 ---
 
