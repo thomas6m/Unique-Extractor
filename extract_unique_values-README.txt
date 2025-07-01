@@ -1,129 +1,417 @@
-📊 Unique Value Extractor
+# Data Extractor Script Documentation
 
+## Overview
 
-A Python CLI tool to extract unique values from datasets in CSV, JSON, YAML, or Parquet formats. Supports filtering, custom output formats, and flexible row/column layouts.
+The Data Extractor is a powerful Python utility designed to extract unique values from various data file formats with advanced filtering capabilities. It supports CSV, JSON, YAML, and Parquet files, offering both command-line and interactive modes for maximum flexibility.
 
-✨ Features
+## Features
 
-✅ Supports CSV, JSON, YAML, and Parquet input files
-🔍 Interactive field filtering with value preview
-🧪 Extract unique values from any column (including exploded contact_ids)
-💾 Output to CSV, JSON, YAML, or Parquet
-🔃 Choose between single-row or multi-row format
-⚙️ Custom column names and value separators
-🧠 Memory usage and performance reporting
-📓 Logs activity to extractor.log
+- **Multiple File Format Support**: CSV, JSON, YAML, Parquet
+- **Advanced Filtering**: Support for equality, inequality, numeric comparison, and regex matching
+- **Flexible Output**: Multiple output formats and row arrangements
+- **Interactive Mode**: User-friendly prompts when arguments are missing
+- **Performance Monitoring**: Memory usage and execution time tracking
+- **Robust Error Handling**: Comprehensive validation and error reporting
+- **Logging**: Configurable logging with file and console output
 
+## Installation
 
-📦 Requirements
+### Prerequisites
 
-Install Python dependencies:
+```bash
+pip install polars pyyaml psutil
+```
 
+### Required Python Version
+- Python 3.7+
 
-pip install polars psutil PyYAML
+## Usage
 
-Optional: use a requirements.txt file:
+### Command Line Interface
 
+#### Basic Usage
+```bash
+python extractor.py --input data.csv --output results.csv --unique-field email
+```
 
-polars>=0.20.0
-psutil>=5.9.0
-PyYAML>=6.0
-
-pip install -r requirements.txt
-
-🚀 Usage
-🖥️ Interactive Mode
-
-python extract_unique_values.py
-
-You’ll be prompted to:
-Provide input file path
-Choose filters for any field
-Select a column to extract unique values
-Choose row format (single/multi)
-Set output file name and format (csv, json, yaml, or parquet)
-
-⚙️ Command-Line Mode
-
-python extract_unique_values.py \
-  --input /data/input.csv \
-  --output results.json \
-  --unique-field contact_ids \
+#### Advanced Usage with Filters
+```bash
+python extractor.py \
+  --input data.json \
+  --output results.yaml \
+  --unique-field user_id \
+  --filters "status=active,pending" "age>18" "name~^John" \
   --row-format multi \
-  --column-name contacts \
-  region=apac sector=gcb
-  
-  
-Common CLI options:
-Option				Description
---input				Path to input file (CSV, JSON, YAML, Parquet)
---output			Output file name with extension (e.g., output.csv)
---unique-field		Field to extract unique values from
---separator			Separator for single-row output (default: ;)
---column-name		Custom column name in the output file
---row-format		Single or multi (default: single)
---delimiter			CSV delimiter (default: ,)
---verbose			Enable verbose logging
+  --output-format yaml
+```
 
-filters	Optional filters in the form: field=value1,value2,...
+#### Interactive Mode
+```bash
+python extractor.py
+```
+*Launches interactive mode when required arguments are missing*
 
-📤 Output Formats
+### Command Line Arguments
 
-When saving results, the tool supports:
-.csv 		– Standard CSV
-.json 		– JSON object list
-.yaml 		– YAML structure
-.parquet 	– Apache Parquet (efficient columnar format)
+| Argument | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `--input` | Input file path | - | Yes* |
+| `--output` | Output file path | - | Yes* |
+| `--unique-field` | Field to extract unique values from | - | Yes* |
+| `--separator` | Separator for single-row output | `;` | No |
+| `--column-name` | Custom column name for output | Same as unique-field | No |
+| `--filters` | Filter expressions (see Filter Syntax) | None | No |
+| `--row-format` | Output row format (`single`/`multi`) | `single` | No |
+| `--output-format` | Output file format | `csv` | No |
+| `--delimiter` | CSV input delimiter | `,` | No |
+| `--log-level` | Logging level | `INFO` | No |
 
-The format is determined by either:
+*Required unless using interactive mode
 
-CLI --output file extension, or
+## Filter Syntax
 
-Interactive prompt
+### Supported Operators
 
-🧪 Output Examples
-🔹 Multi-row CSV:
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `=` | Equals (supports multiple values) | `status=active,pending` |
+| `!=` | Not equals | `status!=inactive` |
+| `>` | Greater than (numeric) | `age>18` |
+| `<` | Less than (numeric) | `price<100` |
+| `>=` | Greater than or equal | `score>=80` |
+| `<=` | Less than or equal | `count<=50` |
+| `~` | Regex match | `name~^John.*` |
 
-unique_contact_ids
-abc@example.com
-xyz@example.com
+### Filter Examples
 
-🔸 Single-row JSON:
+```bash
+# Single value equality
+--filters "country=USA"
 
-{
-  "filters": "region=apac, sector=gcb",
-  "unique_contact_ids": "abc@example.com;xyz@example.com"
-}
+# Multiple values (OR condition)
+--filters "status=active,pending,review"
 
-📝 Logging
-Logs are saved in extractor.log with timestamps and error messages.
+# Numeric comparison
+--filters "age>21" "salary>=50000"
 
-✅ Example Session
+# Regex matching
+--filters "email~.*@company\.com$"
 
+# Complex combination
+--filters "department=engineering,sales" "level>=senior" "active=true"
+```
 
-📂 Enter path to input file (CSV, JSON, YAML, or Parquet): /data/sample.parquet
+## Supported File Formats
 
-📌 Available fields: region, sector, environment, contact_ids
-Field name (leave empty to stop): region
-🔹 Available values for 'region': apac, emea
-Enter comma-separated values for region: apac
-...
+### Input Formats
 
-🎯 Available fields: ...
-Select the field to extract unique values from: contact_ids
-Enter separator for unique values (default ';'): ;
-Enter custom column name (default 'unique_contact_ids'):
-Row format? (single/multi) [default=single]: single
-💾 Save results? (y/n): y
-Output file name (without extension): filtered_contacts
-Select output format (csv, json, yaml, parquet) [default=csv]: json
-✅ Output saved to: filtered_contacts.json
+#### CSV
+- Standard comma-separated values
+- Configurable delimiter
+- Automatic schema inference
+- Handles ragged lines gracefully
 
-🧠 System Resource Summary
-After execution, the tool reports time taken and memory used:
+```bash
+python extractor.py --input data.csv --delimiter ";" --unique-field email
+```
 
-⏱️ Time taken: 1.47s | 🧠 Memory used: 33.82 MB
+#### JSON
+- Standard JSON arrays/objects
+- NDJSON (newline-delimited JSON) support
+- Automatic format detection
 
-🔐 License
-This script is provided "as-is" without warranty. You may customize and adapt it for internal or commercial use.
+#### YAML
+- Single and multi-document YAML files
+- Nested structure flattening with dot notation
+- List handling with indexed keys
 
+#### Parquet
+- Efficient columnar format
+- Full schema preservation
+- High-performance reading
+
+### Output Formats
+
+#### Single Row Format (`--row-format single`)
+Creates one row with all unique values concatenated:
+
+```csv
+filters,unique_emails
+"status=active",john@example.com;jane@example.com;bob@example.com
+```
+
+#### Multi Row Format (`--row-format multi`)
+Creates one row per unique value:
+
+```csv
+unique_emails
+john@example.com
+jane@example.com
+bob@example.com
+```
+
+## Configuration Class
+
+The script uses a configuration dataclass for internal organization:
+
+```python
+@dataclass
+class ExtractorConfig:
+    input_file: str
+    output_file: str
+    unique_field: str
+    separator: str = ";"
+    column_name: Optional[str] = None
+    row_format: str = "single"
+    output_format: str = "csv"
+    delimiter: str = ","
+    filters: List[Tuple[str, str, List[str]]] = None
+```
+
+## Special Features
+
+### Contact IDs Processing
+Special handling for comma-separated contact ID fields:
+
+```bash
+python extractor.py --input contacts.csv --unique-field contact_ids --output unique_contacts.csv
+```
+
+This will:
+1. Split comma-separated values in the `contact_ids` field
+2. Extract unique individual contact IDs
+3. Remove duplicates and empty values
+
+### Nested Data Flattening
+YAML and JSON nested structures are automatically flattened:
+
+```yaml
+# Input YAML
+user:
+  profile:
+    name: "John Doe"
+    details:
+      age: 30
+      city: "New York"
+```
+
+Becomes:
+```
+user.profile.name: "John Doe"
+user.profile.details.age: 30
+user.profile.details.city: "New York"
+```
+
+## Interactive Mode
+
+When required arguments are missing, the script enters interactive mode:
+
+```
+⚡ Interactive mode enabled...
+Enter input file path: data.csv
+
+📌 Available fields (5): name, email, age, department, status
+
+Field name (or 'done' to finish): status
+🔹 Unique values for 'status' (3): active, inactive, pending
+Operator ['=', '!=', '>', '<', '>=', '<=', '~'] (default '='): =
+Enter comma-separated value(s): active,pending
+✅ Added filter: status = active, pending
+
+Field name (or 'done' to finish): done
+
+🎯 Available fields: name, email, age, department, status
+Field to extract unique values from: email
+
+Separator for single-row output (default: ;): 
+Column name (default: email): 
+Row format (single/multi) [default: single]: 
+Output format (csv/json/yaml/parquet) [default: csv]: 
+Output file path: unique_emails.csv
+```
+
+## Error Handling
+
+### Common Errors and Solutions
+
+#### File Not Found
+```
+❌ File does not exist: data.csv
+```
+**Solution**: Check file path and ensure file exists
+
+#### Missing Columns
+```
+❌ Missing columns in input file: {'status', 'department'}
+```
+**Solution**: Verify column names in your data file
+
+#### Invalid Filter Syntax
+```
+⚠️ Skipping invalid filter 'status': Invalid filter format
+```
+**Solution**: Use proper operator syntax (e.g., `status=active`)
+
+#### Numeric Conversion Error
+```
+❌ Cannot convert 'abc' to number for comparison
+```
+**Solution**: Ensure numeric values when using `>`, `<`, `>=`, `<=` operators
+
+## Performance Considerations
+
+### Memory Usage
+- Uses Polars LazyFrames for memory-efficient processing
+- Suitable for large datasets (tested with files up to several GB)
+- Memory usage reported at completion
+
+### File Size Recommendations
+- **CSV**: Up to 1GB+ (depends on available RAM)
+- **JSON**: Up to 500MB (due to parsing overhead)
+- **Parquet**: Up to 2GB+ (most efficient format)
+- **YAML**: Up to 100MB (due to parsing complexity)
+
+### Performance Tips
+1. Use Parquet format for large datasets
+2. Apply filters to reduce data early
+3. Use `--log-level ERROR` for better performance in batch processing
+4. Consider splitting very large files if memory issues occur
+
+## Logging
+
+### Log Levels
+- `DEBUG`: Detailed processing information
+- `INFO`: General operation info (default)
+- `WARNING`: Non-critical issues
+- `ERROR`: Critical errors only
+
+### Log Output
+- File: `extractor.log` (always created)
+- Console: Warnings and errors in interactive mode
+
+### Example Log Entry
+```
+2024-01-15 10:30:15 - INFO - Reading CSV file: /path/to/data.csv (45.2 MB)
+2024-01-15 10:30:18 - INFO - Applied filter: status = ['active', 'pending']
+2024-01-15 10:30:19 - INFO - Saved 1,234 unique values to /path/to/output.csv
+```
+
+## Examples
+
+### Example 1: Basic Email Extraction
+```bash
+python extractor.py \
+  --input customer_data.csv \
+  --output unique_emails.csv \
+  --unique-field email \
+  --filters "status=active"
+```
+
+### Example 2: Multi-format Processing
+```bash
+python extractor.py \
+  --input users.json \
+  --output active_users.yaml \
+  --unique-field user_id \
+  --filters "account_type=premium,enterprise" "last_login>=2024-01-01" \
+  --row-format multi \
+  --output-format yaml
+```
+
+### Example 3: Complex Filtering
+```bash
+python extractor.py \
+  --input sales_data.parquet \
+  --output filtered_customers.json \
+  --unique-field customer_id \
+  --filters "region=north,south" "revenue>10000" "customer_name~.*Corp$" \
+  --output-format json
+```
+
+### Example 4: Contact ID Processing
+```bash
+python extractor.py \
+  --input campaign_data.csv \
+  --output unique_contacts.csv \
+  --unique-field contact_ids \
+  --filters "campaign_status=completed" "send_date>=2024-01-01"
+```
+
+## API Reference
+
+### Core Functions
+
+#### `read_input_file(filepath: Path, delimiter: str) -> pl.DataFrame`
+Reads input file based on extension.
+
+**Parameters:**
+- `filepath`: Path to input file
+- `delimiter`: CSV delimiter (ignored for other formats)
+
+**Returns:** Polars DataFrame
+
+#### `extract_unique_values(config: ExtractorConfig) -> pl.Series`
+Main extraction logic with filtering.
+
+**Parameters:**
+- `config`: ExtractorConfig object
+
+**Returns:** Polars Series of unique values
+
+#### `save_output(series: pl.Series, config: ExtractorConfig) -> None`
+Saves output in specified format.
+
+**Parameters:**
+- `series`: Unique values series
+- `config`: Configuration object
+
+### Classes
+
+#### `FileReader`
+Static methods for reading different file formats.
+
+#### `FilterParser`
+Handles parsing and validation of filter expressions.
+
+#### `FilterApplier`
+Applies filters to LazyFrames.
+
+#### `InteractivePrompts`
+Manages interactive user input.
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Unicode Errors**: Ensure input files are UTF-8 encoded
+2. **Memory Issues**: Use `--log-level ERROR` and process smaller chunks
+3. **Regex Errors**: Escape special characters in regex patterns
+4. **CSV Parsing**: Adjust `--delimiter` for non-standard CSV files
+5. **YAML Complex Structures**: Nested lists may need preprocessing
+
+### Debug Mode
+```bash
+python extractor.py --log-level DEBUG --input data.csv --output test.csv --unique-field id
+```
+
+### Getting Help
+```bash
+python extractor.py --help
+```
+
+## License and Contributing
+
+This script is provided as-is for data processing tasks. Feel free to modify and extend based on your needs.
+
+### Extending the Script
+
+Common extensions:
+- Additional file format support
+- Custom output transformations
+- Database connectivity
+- Parallel processing for very large files
+- Custom filter operators
+
+---
+
+*For technical support or feature requests, please refer to your internal documentation or contact the development team.*
