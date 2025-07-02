@@ -1,135 +1,258 @@
-# Unique Value Extractor
+# Data Extractor Tool
 
-A powerful command-line tool to extract unique values from tabular data files (CSV, JSON, YAML, Parquet) with flexible filtering and output options.
+A robust command-line tool for extracting unique values from tabular data files with flexible filtering and output options.
 
 ## Features
 
-- Supports multiple input formats: CSV, JSON, YAML, Parquet
-- Extract unique values from any specified column
-- Advanced filtering with operators: `=`, `!=`, `>`, `<`, `>=`, `<=`, regex match `~`
-- Supports multi-value fields with custom separators
-- Output results in CSV, JSON, YAML, or Parquet format
-- Drop rows with null values in the target column
-- Dry-run mode to preview output without saving
-- Configurable via command-line arguments or YAML config file
-- Detailed logging with file and console output
+- **Multiple file formats**: CSV, JSON, YAML, Parquet
+- **Flexible filtering**: Support for various operators (=, !=, >, <, >=, <=, ~)
+- **Multi-value field handling**: Split delimited values and extract unique items
+- **Multiple output formats**: CSV, JSON, YAML, Parquet
+- **Configuration options**: Command-line arguments or YAML config file
+- **Memory monitoring**: Built-in memory usage tracking
+- **Comprehensive logging**: Detailed execution logs
+- **Dry run mode**: Preview results without writing files
 
 ## Installation
 
-Requires Python 3.7+ and the following packages:
-- polars
-- pyyaml
-- psutil
+### Requirements
 
-Install dependencies with:
 ```bash
 pip install polars pyyaml psutil
 ```
 
+### Dependencies
+
+- `polars` - Fast DataFrame processing
+- `pyyaml` - YAML file handling
+- `psutil` - Memory monitoring
+- `argparse` - Command-line interface (built-in)
+- `logging` - Execution logging (built-in)
+
 ## Usage
 
+### Command Line Interface
+
+#### Basic Usage
+
 ```bash
-python extractor.py --input input.csv --output output.csv --unique-field email [options]
+python extractor.py --input data.csv --output results.csv --unique-field email
 ```
 
-### Required Arguments
+#### Advanced Usage with Filters
 
-- `--input` — Input file path (CSV, JSON, YAML, Parquet)
-- `--output` — Output file path
-- `--unique-field` — Column name to extract unique values from
-
-### Optional Arguments
-
-- `--filters` — Filters to apply, e.g. `status=active`, `age>=30`, `name~^John`
-- `--delimiter` — CSV delimiter in input file (default: `,`)
-- `--separator` — Separator used inside multi-value fields (default: `;`)
-- `--column-name` — Override output column name (defaults to unique field)
-- `--row-format` — Output format style: `single` (one row, values joined) or `multi` (one row per value)
-- `--output-format` — Output file format: `csv`, `json`, `yaml`, `parquet` (default: `csv`)
-- `--drop-na` — Drop rows where unique field is null
-- `--dry-run` — Process without saving output, prints preview
-- `--log-level` — Logging verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR` (default: `INFO`)
-- `--config` — Load configuration from YAML file
-- `--print-config-template` — Print a sample YAML config and exit
-
-## Filters Syntax
-
-Filters are specified as strings with the format:
-```
-field operator value[,value2,...]
-```
-
-### Supported operators:
-
-| Operator | Meaning | Example |
-|----------|---------|---------|
-| `=` | Equals (exact match) | `status=active` |
-| `!=` | Not equals | `status!=inactive` |
-| `>` | Greater than (numeric) | `age>30` |
-| `<` | Less than (numeric) | `age<50` |
-| `>=` | Greater or equal | `score>=80` |
-| `<=` | Less or equal | `score<=100` |
-| `~` | Regex contains | `name~^John` (starts with John) |
-
-Multiple values can be comma-separated:
-```
-status=active,pending
-```
-
-## Example CLI Usage
-
-### Extract unique emails from users.csv where status is active and age is over 30:
 ```bash
 python extractor.py \
-  --input users.csv \
-  --output active_emails.csv \
+  --input data/input.csv \
+  --output results/unique_emails.csv \
   --unique-field email \
-  --filters "status=active" "age>30" \
+  --filters "status=active" "age>=18" \
+  --separator ";" \
+  --row-format single \
+  --output-format csv \
   --drop-na
 ```
 
-### Extract unique tags from a multi-value tags column, outputting one value per row in JSON:
-```bash
-python extractor.py \
-  --input data.json \
-  --output tags.json \
-  --unique-field tags \
-  --row-format multi \
-  --output-format json \
-  --separator ","
-```
+#### Using Configuration File
 
-## YAML Configuration Example
-
-You can specify all options in a YAML file:
-```yaml
-input_file: "input.csv"
-output_file: "output.csv"
-unique_field: "email"
-filters:
-  - ["status", "=", ["active"]]
-  - ["age", ">", ["30"]]
-separator: ";"
-row_format: "single"
-output_format: "csv"
-delimiter: ","
-drop_na: false
-dry_run: false
-```
-
-Run with:
 ```bash
 python extractor.py --config config.yaml
 ```
 
+### Configuration File
+
+Create a `config.yaml` file for reusable configurations:
+
+```yaml
+input_file: "data/input.csv"
+output_file: "results/unique_emails.csv"
+unique_field: "email"
+filters:
+  - ["status", "=", ["active"]]
+  - ["age", ">=", ["18"]]
+separator: ";"
+row_format: "single"      # or "multi"
+output_format: "csv"      # csv, json, yaml, parquet
+delimiter: ","            # CSV delimiter for input file
+drop_na: true             # drop rows where field is null
+dry_run: false            # preview mode without writing files
+```
+
+## Command Line Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--input` | Input file path | Required |
+| `--output` | Output file path | Required |
+| `--unique-field` | Field to extract unique values from | Required |
+| `--config` | YAML configuration file path | None |
+| `--filters` | Filter expressions (e.g., "status=active") | None |
+| `--separator` | Delimiter for multi-value fields | ";" |
+| `--row-format` | Output format: "single" or "multi" | "single" |
+| `--output-format` | Output file format: csv, json, yaml, parquet | "csv" |
+| `--delimiter` | CSV input delimiter | "," |
+| `--column-name` | Custom output column name | None |
+| `--drop-na` | Drop null values | False |
+| `--dry-run` | Preview without writing files | False |
+| `--print-config-template` | Print sample YAML config | - |
+
+## Filtering
+
+The tool supports various filter operations:
+
+### Filter Operators
+
+- `=` - Exact match
+- `!=` - Not equal
+- `>` - Greater than
+- `<` - Less than
+- `>=` - Greater than or equal
+- `<=` - Less than or equal
+- `~` - Regex contains
+
+### Filter Examples
+
+```bash
+# Single filter
+--filters "status=active"
+
+# Multiple filters (AND logic)
+--filters "status=active" "age>=18" "department!=HR"
+
+# Regex filter
+--filters "email~@company\.com$"
+```
+
+## Output Formats
+
+### Row Formats
+
+- **single**: All unique values joined as one string in a single row
+- **multi**: Each unique value on its own row
+
+### File Formats
+
+- **CSV**: Comma-separated values
+- **JSON**: JavaScript Object Notation
+- **YAML**: YAML Ain't Markup Language
+- **Parquet**: Columnar storage format
+
+## Multi-Value Field Processing
+
+When dealing with fields containing multiple values separated by a delimiter:
+
+```csv
+id,tags
+1,"python;data;analysis"
+2,"web;javascript;react"
+```
+
+Using `--separator ";"` and `--row-format multi` will extract:
+- python
+- data
+- analysis
+- web
+- javascript
+- react
+
+## Examples
+
+### Extract Unique Email Addresses
+
+```bash
+python extractor.py \
+  --input users.csv \
+  --output unique_emails.csv \
+  --unique-field email \
+  --filters "status=active" \
+  --drop-na
+```
+
+### Extract Tags from Multi-Value Field
+
+```bash
+python extractor.py \
+  --input posts.json \
+  --output unique_tags.yaml \
+  --unique-field tags \
+  --separator "," \
+  --row-format multi \
+  --output-format yaml
+```
+
+### Dry Run with Preview
+
+```bash
+python extractor.py \
+  --input data.csv \
+  --output preview.csv \
+  --unique-field category \
+  --dry-run
+```
+
+## Architecture Overview
+
+### Core Components
+
+1. **Configuration Management**: `ExtractorConfig` dataclass for parameter handling
+2. **File I/O**: Support for multiple input/output formats using Polars
+3. **Data Processing**: Efficient DataFrame operations with memory monitoring
+4. **Filtering Engine**: `FilterParser` and `FilterApplier` for flexible data filtering
+5. **Logging System**: Comprehensive execution tracking and error handling
+
+### Data Flow
+
+1. **Input Validation**: Verify file existence and format
+2. **Data Loading**: Read data using appropriate Polars reader
+3. **Data Flattening**: Convert nested structures to tabular format
+4. **Filter Application**: Apply user-defined filters
+5. **Unique Extraction**: Extract and sort unique values
+6. **Output Generation**: Save results in specified format
+
+## Error Handling
+
+The tool provides comprehensive error handling for:
+
+- Invalid file paths or formats
+- Memory limitations
+- Malformed filter expressions
+- Data processing errors
+- Output writing failures
+
 ## Logging
 
-Logs are saved in the `logs` directory as `extractor.log`. Logs also print to console.
+Execution logs are automatically saved to the `logs/` directory with timestamps and include:
 
-## Development & Contribution
+- Configuration details
+- Processing statistics
+- Memory usage
+- Error messages
+- Execution time
 
-Contributions welcome! Feel free to open issues or submit pull requests.
+## Performance
+
+- Built on Polars for high-performance data processing
+- Memory usage monitoring to prevent system overload
+- Lazy evaluation for efficient large dataset handling
+- Optimized for both small and large datasets
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
 
 ## License
 
-MIT License
+[Add your license information here]
+
+---
+
+**Generate Config Template**
+```bash
+python extractor.py --print-config-template
+```
+
+This will output a sample YAML configuration file that you can customize for your needs.
