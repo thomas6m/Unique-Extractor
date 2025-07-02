@@ -1,263 +1,171 @@
-# Data Extractor
+# extractor.py Runbook
 
-A powerful Python utility for extracting unique values from various data file formats with advanced filtering capabilities.
+## Overview
 
-[![Python Version](https://img.shields.io/badge/python-3.7+-blue.svg)](https://python.org)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+The `extractor.py` script is a data processing tool designed to:
 
-## 🚀 Features
+- Load structured data from various formats (CSV, JSON, YAML, Parquet)
+- Extract unique values from a specified column (`unique_field`)
+- Apply filters, handle multi-value fields, clean up whitespace, and optionally drop nulls
+- Output the result in your chosen format (CSV, JSON, YAML, or Parquet)
 
-- **Multiple File Format Support**: CSV, JSON, YAML, and Parquet
-- **Advanced Filtering**: Equality, inequality, numeric comparison, and regex matching
-- **Flexible Output**: Multiple output formats and row arrangements
-- **Interactive Mode**: User-friendly prompts when arguments are missing
-- **Performance Monitoring**: Memory usage and execution time tracking
-- **Robust Error Handling**: Comprehensive validation and error reporting
-- **Configurable Logging**: File and console output with multiple log levels
-
-## 📋 Prerequisites
-
-- Python 3.7+
-- Required packages (see [Installation](#installation))
-
-## 🔧 Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/yourusername/data-extractor.git
-   cd data-extractor
-   ```
-
-2. **Install dependencies**
-   ```bash
-   pip install polars pyyaml psutil
-   ```
-
-   Or using requirements.txt:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-## 🎯 Quick Start
+## Quick Start
 
 ### Basic Usage
-```bash
-python extractor.py --input data.csv --output results.csv --unique-field email
-```
 
-### Advanced Usage with Filters
 ```bash
 python extractor.py \
-  --input data.json \
-  --output results.yaml \
-  --unique-field user_id \
-  --filters "status=active,pending" "age>18" "name~^John" \
-  --row-format multi \
-  --output-format yaml
+  --input <input_file_path> \
+  --output <output_file_path> \
+  --unique-field <column_name>
 ```
 
-### Interactive Mode
+### Full Command Syntax
+
 ```bash
-python extractor.py
+python extractor.py \
+  --input <input_file_path> \
+  --output <output_file_path> \
+  --unique-field <column_name> \
+  [--filters <filter1> <filter2> ...] \
+  [--delimiter <char>] \
+  [--separator <char>] \
+  [--column-name <output_column>] \
+  [--row-format single|multi] \
+  [--output-format csv|json|yaml|parquet] \
+  [--log-level DEBUG|INFO|WARNING|ERROR] \
+  [--drop-na] \
+  [--dry-run]
 ```
 
-## 📚 Usage Guide
+### Example
 
-### Command Line Arguments
+```bash
+python extractor.py \
+  --input data.csv \
+  --output result.csv \
+  --unique-field email \
+  --filters "country=US" "status!=inactive" \
+  --drop-na \
+  --output-format csv
+```
 
-| Argument | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `--input` | Input file path | - | Yes* |
-| `--output` | Output file path | - | Yes* |
-| `--unique-field` | Field to extract unique values from | - | Yes* |
-| `--separator` | Separator for single-row output | `;` | No |
-| `--column-name` | Custom column name for output | Same as unique-field | No |
-| `--filters` | Filter expressions | None | No |
-| `--row-format` | Output row format (`single`/`multi`) | `single` | No |
-| `--output-format` | Output file format | `csv` | No |
-| `--delimiter` | CSV input delimiter | `,` | No |
-| `--log-level` | Logging level | `INFO` | No |
+## Arguments Reference
 
-*Required unless using interactive mode
+| Argument | Description | Required | Default |
+|----------|-------------|----------|---------|
+| `--input` | Path to input file (CSV, JSON, YAML, Parquet) | ✅ | — |
+| `--output` | Path to save the output | ✅ | — |
+| `--unique-field` | Column to extract unique values from | ✅ | — |
+| `--filters` | List of filters (e.g., `age>30`, `status=active`) | ❌ | `[]` |
+| `--delimiter` | Input file delimiter (for CSV) | ❌ | `,` |
+| `--separator` | Multi-value field separator | ❌ | `;` |
+| `--column-name` | Column name for output | ❌ | Same as `unique-field` |
+| `--row-format` | Output row format: `single` or `multi` | ❌ | `single` |
+| `--output-format` | Output file format | ❌ | `csv` |
+| `--log-level` | Logging level | ❌ | `INFO` |
+| `--drop-na` | Exclude null values in output | ❌ | `False` |
+| `--dry-run` | Run without writing output file | ❌ | `False` |
+
+## Supported File Formats
+
+### Input Formats
+
+| Format | Extension | Notes |
+|--------|-----------|-------|
+| CSV | `.csv` | Must match `--delimiter` |
+| JSON | `.json` | Supports JSON arrays and NDJSON |
+| YAML | `.yaml`, `.yml` | Will be flattened |
+| Parquet | `.parquet` | Natively supported |
+
+### Output Formats
+
+- **CSV**: Standard CSV file with extracted values
+- **JSON**: List of dictionaries, optionally with metadata
+- **YAML**: YAML output, useful for configurations
+- **Parquet**: Efficient columnar storage format
+
+## Filtering
 
 ### Filter Syntax
 
+```bash
+--filters "age>30" "status=active" "country!=US" "name~john"
+```
+
+### Supported Operators
+
 | Operator | Description | Example |
 |----------|-------------|---------|
-| `=` | Equals (supports multiple values) | `status=active,pending` |
+| `=` | Equals | `status=active` |
 | `!=` | Not equals | `status!=inactive` |
-| `>` | Greater than (numeric) | `age>18` |
-| `<` | Less than (numeric) | `price<100` |
+| `>` | Greater than | `age>30` |
+| `<` | Less than | `age<65` |
 | `>=` | Greater than or equal | `score>=80` |
-| `<=` | Less than or equal | `count<=50` |
-| `~` | Regex match | `name~^John.*` |
+| `<=` | Less than or equal | `score<=100` |
+| `~` | Regex match | `name~john` |
 
-### Supported File Formats
+### Multiple Values
 
-#### Input Formats
-- **CSV**: Standard comma-separated values with configurable delimiter
-- **JSON**: Standard JSON arrays/objects and NDJSON support
-- **YAML**: Single and multi-document YAML files with nested structure flattening
-- **Parquet**: Efficient columnar format with full schema preservation
+For `=` and `!=` operators, you can specify multiple values using comma separation:
 
-#### Output Formats
-- **Single Row**: All unique values in one row (concatenated)
-- **Multi Row**: One row per unique value
-
-## 💡 Examples
-
-### Example 1: Basic Email Extraction
 ```bash
-python extractor.py \
-  --input customer_data.csv \
-  --output unique_emails.csv \
-  --unique-field email \
-  --filters "status=active"
+--filters "country=US,CA,UK"
 ```
 
-### Example 2: Multi-format Processing
-```bash
-python extractor.py \
-  --input users.json \
-  --output active_users.yaml \
-  --unique-field user_id \
-  --filters "account_type=premium,enterprise" "last_login>=2024-01-01" \
-  --row-format multi \
-  --output-format yaml
+## Troubleshooting
+
+| Issue | Cause | Resolution |
+|-------|-------|------------|
+| `FileNotFoundError` | Invalid input path | Check `--input` path exists |
+| `ValueError: Path is not a file` | Path is a directory | Provide file path, not directory |
+| `Unsupported file format` | Unknown file extension | Use supported file types |
+| `Field '<name>' not found in input schema` | Invalid `--unique-field` | Check column name spelling/case |
+| `Unsupported operator` | Invalid filter operator | Use supported operators: `= != > < >= <= ~` |
+| `dry run mode - output not written` | `--dry-run` flag is set | Remove `--dry-run` flag to save output |
+
+## Logging
+
+- Logs are saved to `logs/extractor.log`  
+- Console logs are also printed to stdout
+- Logging level is controlled by `--log-level`
+
+Available log levels: `DEBUG`, `INFO`, `WARNING`, `ERROR`
+
+## Performance Monitoring
+
+After each run, the script reports:
+
+- Time taken
+- Memory usage delta  
+- Number of unique values extracted
+
+**Example output:**
+```
+⏱ 2.34s | 🧠 memory Δ +18.7 MB | ✅ 223 unique values
 ```
 
-### Example 3: Complex Filtering
-```bash
-python extractor.py \
-  --input sales_data.parquet \
-  --output filtered_customers.json \
-  --unique-field customer_id \
-  --filters "region=north,south" "revenue>10000" "customer_name~.*Corp$" \
-  --output-format json
-```
+## Best Practices
 
-### Example 4: Contact ID Processing
-```bash
-python extractor.py \
-  --input campaign_data.csv \
-  --output unique_contacts.csv \
-  --unique-field contact_ids \
-  --filters "campaign_status=completed" "send_date>=2024-01-01"
-```
+- **Validate first**: Use `--dry-run` to test filters before running full extraction
+- **Clean data**: Use `--drop-na` to exclude blanks/nulls from output
+- **Format optimization**: Use `--row-format multi` for one value per line (useful for IDs)
+- **Audit trail**: Keep logs for debugging and auditing purposes
+- **Performance**: For large datasets, consider using Parquet format for better performance
 
-## 🔍 Interactive Mode
+## Contributing
 
-When required arguments are missing, the script automatically enters interactive mode:
+When contributing to this script:
 
-```
-⚡ Interactive mode enabled...
-Enter input file path: data.csv
+1. Ensure all new features are documented in this runbook
+2. Add appropriate error handling and logging
+3. Include examples for new functionality
+4. Update the troubleshooting section for new error conditions
 
-📌 Available fields (5): name, email, age, department, status
+## License
 
-Field name (or 'done' to finish): status
-🔹 Unique values for 'status' (3): active, inactive, pending
-Operator ['=', '!=', '>', '<', '>=', '<=', '~'] (default '='): =
-Enter comma-separated value(s): active,pending
-✅ Added filter: status = active, pending
-
-Field name (or 'done' to finish): done
-
-🎯 Available fields: name, email, age, department, status
-Field to extract unique values from: email
-```
-
-## ⚡ Performance
-
-### Memory Usage
-- Uses Polars LazyFrames for memory-efficient processing
-- Suitable for large datasets (tested with files up to several GB)
-- Memory usage reported at completion
-
-### File Size Recommendations
-- **CSV**: Up to 1GB+ (depends on available RAM)
-- **JSON**: Up to 500MB (due to parsing overhead)
-- **Parquet**: Up to 2GB+ (most efficient format)
-- **YAML**: Up to 100MB (due to parsing complexity)
-
-### Performance Tips
-1. Use Parquet format for large datasets
-2. Apply filters to reduce data early
-3. Use `--log-level ERROR` for better performance in batch processing
-4. Consider splitting very large files if memory issues occur
-
-## 📊 Logging
-
-### Log Levels
-- `DEBUG`: Detailed processing information
-- `INFO`: General operation info (default)
-- `WARNING`: Non-critical issues
-- `ERROR`: Critical errors only
-
-### Log Output
-- **File**: `extractor.log` (always created)
-- **Console**: Warnings and errors in interactive mode
-
-## 🛠️ Troubleshooting
-
-### Common Issues
-
-| Issue | Solution |
-|-------|----------|
-| **File Not Found** | Check file path and ensure file exists |
-| **Missing Columns** | Verify column names in your data file |
-| **Invalid Filter Syntax** | Use proper operator syntax (e.g., `status=active`) |
-| **Numeric Conversion Error** | Ensure numeric values when using comparison operators |
-| **Unicode Errors** | Ensure input files are UTF-8 encoded |
-| **Memory Issues** | Use `--log-level ERROR` and process smaller chunks |
-
-### Debug Mode
-```bash
-python extractor.py --log-level DEBUG --input data.csv --output test.csv --unique-field id
-```
-
-### Getting Help
-```bash
-python extractor.py --help
-```
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
-
-### Development Setup
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Extending the Script
-
-Common extensions:
-- Additional file format support
-- Custom output transformations
-- Database connectivity
-- Parallel processing for very large files
-- Custom filter operators
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 📞 Support
-
-For technical support or feature requests:
-- Open an [issue](https://github.com/yourusername/data-extractor/issues)
-- Check existing [discussions](https://github.com/yourusername/data-extractor/discussions)
-- Review the [troubleshooting guide](#troubleshooting)
-
-## 🏷️ Version History
-
-- **v1.0.0** - Initial release with basic extraction functionality
-- **v1.1.0** - Added interactive mode and advanced filtering
-- **v1.2.0** - Multi-format support and performance improvements
+[Add your license information here]
 
 ---
 
-⭐ **Star this repository if you find it useful!**
+> **Note**: This runbook is maintained alongside the `extractor.py` script. Please keep both in sync when making changes.
