@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import polars as pl
 import argparse
 import os
@@ -5,269 +7,339 @@ import sys
 import logging
 import time
 import psutil
-import yaml  # for YAML reading fallback
+import yaml
+import re
+from pathlib import Path
+from typing import List, Optional, Tuple, Union
+from dataclasses import dataclass
 
-# ------------------------- Logging Setup ------------------------- #
-logging.basicConfig(
-    filename='extractor.log',
-    filemode='a',
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
+# ---------------- Configuration ---------------- #
+@dataclass
+class ExtractorConfig:
+    input_file: str
+    output_file: str
+    unique_field: str
+    separator: str = ";"
+    column_name: Optional[str] = None
+    row_format: str = "single"
+    output_format: str = "csv"
+    delimiter: str = ","
+    delimiter_regex: Optional[str] = None
+    filters: List[Tuple[str, str, List[str]]] = None
+    drop_na: bool = False
+    dry_run: bool = False
 
-# ------------------------- File Reading Function ------------------------- #
-def read_input_file(input_file: str, delimiter: str):
-    """Auto-detect file format based on file extension."""
-    file_extension = input_file.split('.')[-1].lower()
+    def __post_init__(self):
+        self.filters = self.filters or []
+        if self.column_name is None:
+            self.column_name = self.unique_field
 
-    if file_extension == 'csv':
-        return pl.read_csv(input_file, separator=delimiter)
-    elif file_extension == 'json':
-        return pl.read_json(input_file)
-    elif file_extension == 'parquet':
-        return pl.read_parquet(input_file)
-    elif file_extension in ('yaml', 'yml'):
-        # polars does not support YAML natively; read with PyYAML then convert
-        with open(input_file, 'r') as f:
-            data = yaml.safe_load(f)
-        return pl.from_dicts(data if isinstance(data, list) else [data])
-    else:
-        raise ValueError(f"Unsupported file format: {file_extension}")
+# ---------------- Logging ---------------- #
+def setup_logging(level: str = "INFO"):
+    log_dir = Path("logs")
+    log_dir.mkdir(exist_ok=True)
+    handlers = [
+        logging.FileHandler(log_dir / "extractor.log"),
+        logging.StreamHandler(sys.stdout)
+    ]
+    logging.basicConfig(
+        level=getattr(logging, level.upper(), logging.INFO),
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        handlers=handlers
+    )
 
-# ------------------------- Filter Parsing ------------------------- #
-def parse_cli_filters(filters_raw) -> dict:
-    filters = {}
-    for arg in filters_raw:
-        if "=" not in arg:
-            continue
-        key, value = arg.split("=", 1)
-        filters[key.strip()] = [v.strip() for v in value.split(",") if v.strip()]
-    return filters
+# ---------------- File I/O ---------------- #
+def validate_file_path(path: str) -> Path:
+    p = Path(path).resolve()
+    if not p.exists():
+        raise FileNotFoundError(f"File not found: {path}")
+    if not p.is_file():
+        raise ValueError(f"Path is not a file: {path}")
+    return p
 
-def prompt_filters(columns: list[str], df: pl.DataFrame) -> dict:
-    print("\n📌 Available fields:", ', '.join(columns))
-    filters = {}
-    while True:
-        field = input("Field name (leave empty to stop): ").strip()
-        if not field:
-            break
-        if field not in columns:
-            print(f"❌ '{field}' is not a valid column.")
-            continue
+def read_input_file(path: Path, delimiter: str) -> pl.DataFrame:
+    ext = path.suffix.lower()
+    size_mb = path.stat().st_size / (1024 * 1024)
+    logging.info(f"Reading {ext} file: {path.name} ({size_mb:.2f} MB)")
+    try:
+        if ext == ".csv":
+            return pl.read_csv(path, separator=delimiter, ignore_errors=True,
+                               truncate_ragged_lines=True, infer_schema_length=10000)
+        if ext == ".json":
+            try:
+                return pl.read_ndjson(path)
+            except:
+                return pl.read_json(path)
+        if ext in {".yml", ".yaml"}:
+            raw = yaml.safe_load(path.open("r", encoding="utf-8"))
+            rows = raw if isinstance(raw, list) else [raw]
+            return pl.DataFrame([flatten_dict(r) for r in rows if r is not None])
+        if ext == ".parquet":
+            return pl.read_parquet(path)
+    except Exception as e:
+        logging.error(f"Failed to read {path}: {e}")
+        raise
+    raise ValueError(f"Unsupported file format: {ext}")
 
-        # Show distinct values for this field
-        distinct_vals = df.select(pl.col(field).unique()).to_series().drop_nulls().to_list()
-        distinct_vals_str = ', '.join(str(v) for v in distinct_vals)
-        print(f"🔹 Available values for '{field}': {distinct_vals_str}")
-
-        values = input(f"Enter comma-separated values for {field}: ").strip()
-        filters[field] = [v.strip() for v in values.split(",") if v.strip()]
-    return filters
-
-# ------------------------- Prompt Options ------------------------- #
-def prompt_unique_field(columns: list[str]) -> str:
-    print("\n🎯 Available fields:", ', '.join(columns))
-    while True:
-        field = input("Select the field to extract unique values from: ").strip()
-        if field in columns or field == "contact_ids":
-            return field
-        print(f"❌ Invalid field '{field}'. Try again.")
-
-def prompt_separator(default_sep: str = ";") -> str:
-    sep = input(f"Enter separator for unique values (default '{default_sep}'): ").strip()
-    return sep if sep else default_sep
-
-def prompt_column_name(default_col: str) -> str:
-    name = input(f"Enter custom column name (default '{default_col}'): ").strip()
-    return name if name else default_col
-
-def prompt_row_format() -> str:
-    while True:
-        choice = input("Row format? (single/multi) [default=single]: ").strip().lower()
-        if choice in {"", "single"}:
-            return "single"
-        elif choice == "multi":
-            return "multi"
+def flatten_dict(d: dict, parent_key: str = '', sep: str = '.') -> dict:
+    if not isinstance(d, dict):
+        return {parent_key or "value": d}
+    items = []
+    for k, v in d.items():
+        new_key = f"{parent_key}{sep}{k}" if parent_key else k
+        if isinstance(v, dict):
+            items.extend(flatten_dict(v, new_key, sep=sep).items())
+        elif isinstance(v, list) and v and isinstance(v[0], dict):
+            for i, item in enumerate(v):
+                items.extend(flatten_dict(item, f"{new_key}[{i}]", sep=sep).items())
         else:
-            print("Invalid option. Choose 'single' or 'multi'.")
+            items.append((new_key, v))
+    return dict(items)
 
-def prompt_output_format() -> str:
-    """Prompt user for output file format."""
-    while True:
-        fmt = input("Select output format (csv, json, yaml, parquet) [default=csv]: ").strip().lower()
-        if fmt in {"csv", "json", "yaml", "parquet"}:
-            return fmt
-        elif fmt == "":
-            return "csv"
-        else:
-            print("❌ Invalid format. Choose from csv, json, yaml, parquet.")
+# ---------------- Filter Logic ---------------- #
+class FilterParser:
+    OPS = [">=", "<=", "!=", "=", ">", "<", "~"]
 
-# ------------------------- Core Processing ------------------------- #
-def filter_and_extract(input_file: str, filters: dict, unique_field: str, delimiter: str) -> pl.Series:
-    filter_columns = list(filters.keys())
-    needed_columns = set(filter_columns + [unique_field])
+    @classmethod
+    def parse(cls, expressions: List[str]) -> List[Tuple[str, str, List[str]]]:
+        valid = []
+        for expr in expressions:
+            m = re.match(r"(.+?)(>=|<=|!=|=|>|<|~)(.+)", expr.strip())
+            if not m:
+                logging.warning(f"Skipping invalid filter: {expr}")
+                continue
+            field, op, vals = m.groups()
+            vals_list = [v.strip() for v in vals.split(",") if v.strip()]
+            if not vals_list:
+                logging.warning(f"No values in filter: {expr}")
+                continue
+            valid.append((field.strip(), op, vals_list))
+            logging.info(f"Parsed filter: {field.strip()} {op} {vals_list}")
+        return valid
 
-    # Auto-detect the file format and read accordingly
-    df = read_input_file(input_file, delimiter)
+class FilterApplier:
+    @staticmethod
+    def apply(lf: pl.LazyFrame, field: str, op: str, vals: List[str]) -> pl.LazyFrame:
+        if field not in lf.schema:
+            raise ValueError(f"Field '{field}' not found in input schema")
+        col = pl.col(field)
 
-    # Lazy frame (processing)
+        if op in {">", "<", ">=", "<="}:
+            try:
+                val = float(vals[0])
+                return lf.filter(getattr(col.cast(pl.Float64, strict=False), op)(val))
+            except ValueError:
+                raise ValueError(f"Cannot convert '{vals[0]}' to float for filter '{op}'")
+        col = col.cast(pl.Utf8).str.strip_chars()
+        if op == "=":
+            return lf.filter(col.is_in(vals))
+        if op == "!=":
+            return lf.filter(~col.is_in(vals))
+        if op == "~":
+            pattern = "|".join(re.escape(v) for v in vals)
+            return lf.filter(col.str.contains(pattern, literal=False))
+        raise ValueError(f"Unsupported operator: {op}")
+
+# ---------------- Processing ---------------- #
+def process_multi(df: pl.DataFrame, field: str, sep: str) -> pl.Series:
+    return (
+        df.lazy()
+        .select(pl.col(field).str.split(sep).explode().str.strip_chars())
+        .filter(pl.col(field).is_not_null() & (pl.col(field) != ""))
+        .unique().sort(field)
+        .collect().get_column(field)
+    )
+
+def extract_unique_values(cfg: ExtractorConfig) -> pl.Series:
+    df = read_input_file(validate_file_path(cfg.input_file), cfg.delimiter)
+    logging.info(f"Loaded {df.height} rows × {df.width} columns")
+    if cfg.unique_field not in df.columns:
+        raise ValueError(f"Unique field missing: {cfg.unique_field}")
     lf = df.lazy()
+    for f, op, vals in cfg.filters:
+        lf = FilterApplier.apply(lf, f, op, vals)
+    if cfg.drop_na:
+        lf = lf.filter(pl.col(cfg.unique_field).is_not_null())
+    filtered = lf.collect()
+    logging.info(f"After filter: {filtered.height} rows")
+    if cfg.row_format == "multi":
+        return process_multi(filtered, cfg.unique_field, cfg.separator)
+    return (
+        filtered.lazy()
+        .select(pl.col(cfg.unique_field).cast(pl.Utf8).str.strip_chars().unique().drop_nulls())
+        .sort(cfg.unique_field)
+        .collect().get_column(cfg.unique_field)
+    )
 
-    for col in needed_columns:
-        lf = lf.with_columns(pl.col(col).cast(pl.Utf8).str.strip_chars().alias(col))
-        lf = lf.filter(pl.col(col).is_not_null() & (pl.col(col) != ""))
-
-    for field, vals in filters.items():
-        lf = lf.filter(pl.col(field).is_in(vals))
-
-    if unique_field == "contact_ids":
-        lf = (
-            lf
-            .with_columns(pl.col("contact_ids").str.split(",").alias("contact_list"))
-            .explode("contact_list")
-            .with_columns(pl.col("contact_list").str.strip_chars().alias("contact"))
-            .filter(pl.col("contact").is_not_null() & (pl.col("contact") != ""))
-        )
-        result = lf.select(pl.col("contact").unique()).collect()
-        return result["contact"]
-    else:
-        result = lf.select(pl.col(unique_field).unique()).collect()
-        return result[unique_field]
-
-# ------------------------- Output Save ------------------------- #
-def save_output(series: pl.Series, filters: dict, unique_field: str, output_file: str,
-                separator: str, row_format: str, column_name: str, output_format: str = "csv"):
+# ---------------- Output ---------------- #
+def save_output(series: pl.Series, cfg: ExtractorConfig):
     try:
-        if os.path.exists(output_file):
-            confirm = input(f"⚠️ File '{output_file}' exists. Overwrite? (y/n): ").strip().lower()
-            if confirm not in ("y", "yes"):
-                print("❌ Aborted by user.")
-                return
-
-        if row_format == "single":
-            out_df = pl.DataFrame({
-                "filters": [", ".join(f"{k}={','.join(v)}" for k, v in filters.items())],
-                column_name: [separator.join(series.to_list())]
-            })
+        out = Path(cfg.output_file)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        meta = {
+            "field": cfg.unique_field,
+            "filters": cfg.filters or [],
+            "count": len(series),
+            "time": time.strftime("%Y-%m-%dT%H:%M:%S")
+        }
+        if cfg.row_format == "single":
+            df = pl.DataFrame({"meta": [str(meta)], cfg.column_name: [cfg.separator.join(series.to_list())]})
         else:
-            out_df = pl.DataFrame({column_name: series})
-
-        if output_format == "csv":
-            out_df.write_csv(output_file)
-        elif output_format == "json":
-            out_df.write_json(output_file)
-        elif output_format == "yaml":
-            out_df.write_yaml(output_file)
-        elif output_format == "parquet":
-            out_df.write_parquet(output_file)
-        else:
-            print(f"❌ Unsupported output format: {output_format}")
+            items = [{cfg.column_name: v} for v in series.to_list()]
+            df = pl.DataFrame([{"meta": str(meta), cfg.column_name: "METADATA"}] + items)
+        if cfg.dry_run:
+            print("Dry run mode - output not written")
+            print(df.head(5))
             return
-
-        logging.info(f"Saved output to: {output_file}")
-        print(f"\n✅ Output saved to: {output_file}")
+        if cfg.output_format == "csv":
+            df.write_csv(out)
+        elif cfg.output_format == "json":
+            df.write_json(out, pretty=True)
+        elif cfg.output_format == "yaml":
+            yaml.safe_dump(df.to_dicts(), out.open("w"), default_flow_style=False)
+        elif cfg.output_format == "parquet":
+            df.write_parquet(out)
+        else:
+            raise ValueError(f"Unsupported format: {cfg.output_format}")
+        logging.info(f"Output written: {out}")
+        print(f"✅ Saved to {out}")
     except Exception as e:
-        logging.error(f"Failed to save output: {e}", exc_info=True)
-        print(f"❌ Failed to save output: {e}")
+        logging.error(f"Failed to save output: {e}")
+        raise
 
-# ------------------------- Main Entry Point ------------------------- #
+# ---------------- Main CLI ---------------- #
+def get_memory_mb() -> float:
+    return psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024)
+
+def load_config_from_yaml(yaml_path: str) -> dict:
+    with open(yaml_path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
 def main():
-    parser = argparse.ArgumentParser(description="Extract unique values from various file formats.")
-    parser.add_argument("--input", help="Input file path (CSV, JSON, YAML, or Parquet)")
-    parser.add_argument("--output", help="Output file path")
-    parser.add_argument("--unique-field", help="Field name to extract unique values from")
-    parser.add_argument("--separator", help="Separator for single-row output")
-    parser.add_argument("--column-name", help="Custom column name for output")
-    parser.add_argument("--row-format", choices=["single", "multi"], help="Output format: single or multi")
-    parser.add_argument("--delimiter", default=",", help="CSV delimiter (default=',')")
-    parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
-    parser.add_argument("filters", nargs="*", help="Filters in format field=value1,value2,...")
+    p = argparse.ArgumentParser(description="Extract unique values from tabular data")
+    p.add_argument("--input", help="Input file path (CSV, JSON, YAML, Parquet)")
+    p.add_argument("--output", help="Output file path")
+    p.add_argument("--unique-field", help="Field to extract unique values from")
+    p.add_argument("--filters", nargs="*", default=[], help="Filters in the form field=val or field>=val")
+    p.add_argument("--delimiter", default=",", help="CSV delimiter (default: ,)")
+    p.add_argument("--separator", default=";", help="Separator for multiple values (e.g., contact_ids)")
+    p.add_argument("--column-name", help="Override column name in output")
+    p.add_argument("--row-format", choices=["single", "multi"], default="single")
+    p.add_argument("--output-format", choices=["csv", "json", "yaml", "parquet"], default="csv")
+    p.add_argument("--log-level", choices=["DEBUG", "INFO", "WARNING", "ERROR"], default="INFO")
+    p.add_argument("--drop-na", action="store_true", help="Drop rows where unique field is null")
+    p.add_argument("--dry-run", action="store_true", help="Run without saving output")
+    p.add_argument("--config", help="Load configuration from YAML file")
 
-    args = parser.parse_args()
+    # New option to print config template
+    p.add_argument(
+        "--print-config-template",
+        action="store_true",
+        help="Print a sample YAML config template and exit"
+    )
 
-    # Prompt for input file if missing
-    if not args.input:
-        args.input = input("📂 Enter path to input file (CSV, JSON, YAML, or Parquet): ").strip()
+    args = p.parse_args()
 
-    start_time = time.time()
-    logging.info(f"Script started with input: {args.input}")
+    if args.print_config_template:
+        sample_yaml = """
+input_file: "input.csv"
+output_file: "output.csv"
+unique_field: "email"
+filters:
+  - ["status", "=", ["active"]]
+separator: ";"
+row_format: "single"
+output_format: "csv"
+delimiter: ","
+drop_na: false
+dry_run: false
+"""
+        print(sample_yaml)
+        sys.exit(0)
 
-    if args.verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
+    setup_logging(args.log_level)
 
-    if not os.path.exists(args.input):
-        logging.error(f"Input file '{args.input}' does not exist.")
-        print(f"❌ Input file '{args.input}' does not exist.")
-        sys.exit(1)
-
-    try:
-        df_preview = read_input_file(args.input, args.delimiter)
-        columns = df_preview.columns
-    except Exception as e:
-        logging.error(f"Failed to read input file: {e}", exc_info=True)
-        print(f"❌ Error reading input file: {e}")
-        sys.exit(1)
-
-    filters = parse_cli_filters(args.filters) if args.filters else prompt_filters(columns, df_preview)
-
-    # Validate filter columns
-    for col in filters.keys():
-        if col not in columns:
-            print(f"❌ Column '{col}' not found in input file.")
+    if args.config:
+        cfg_dict = load_config_from_yaml(args.config)
+        # Override YAML config fields with CLI args if provided
+        if args.input is not None:
+            cfg_dict["input_file"] = args.input
+        if args.output is not None:
+            cfg_dict["output_file"] = args.output
+        if args.unique_field is not None:
+            cfg_dict["unique_field"] = args.unique_field
+        if args.separator is not None:
+            cfg_dict["separator"] = args.separator
+        if args.column_name is not None:
+            cfg_dict["column_name"] = args.column_name
+        if args.row_format is not None:
+            cfg_dict["row_format"] = args.row_format
+        if args.output_format is not None:
+            cfg_dict["output_format"] = args.output_format
+        if args.delimiter is not None:
+            cfg_dict["delimiter"] = args.delimiter
+        if args.filters:
+            cfg_dict["filters"] = FilterParser.parse(args.filters)
+        if args.drop_na:
+            cfg_dict["drop_na"] = True
+        if args.dry_run:
+            cfg_dict["dry_run"] = True
+        
+        try:
+            cfg = ExtractorConfig(**cfg_dict)
+        except Exception as e:
+            logging.error(f"Configuration error: {e}")
+            print(f"❌ Configuration error: {e}")
+            sys.exit(1)
+    else:
+        try:
+            cfg = ExtractorConfig(
+                args.input,
+                args.output,
+                args.unique_field,
+                args.separator,
+                args.column_name,
+                args.row_format,
+                args.output_format,
+                args.delimiter,
+                FilterParser.parse(args.filters),
+                args.drop_na,
+                args.dry_run
+            )
+        except Exception as e:
+            logging.error(f"Configuration error: {e}")
+            print(f"❌ Configuration error: {e}")
             sys.exit(1)
 
-    # Unique field
-    unique_field = args.unique_field if args.unique_field else prompt_unique_field(columns)
-    if unique_field not in columns and unique_field != "contact_ids":
-        print(f"❌ Unique field '{unique_field}' is not in the input file.")
-        sys.exit(1)
-
-    # Separator
-    separator = args.separator if args.separator else prompt_separator()
-
-    # Column name
-    default_col_name = f"unique_{unique_field}"
-    column_name = args.column_name if args.column_name else prompt_column_name(default_col_name)
-
-    # Row format
-    row_format = args.row_format if args.row_format else prompt_row_format()
+    logging.info(f"Config: {cfg}")
+    start_mem = get_memory_mb()
+    start = time.time()
 
     try:
-        result_series = filter_and_extract(args.input, filters, unique_field, args.delimiter)
+        series = extract_unique_values(cfg)
+    except FileNotFoundError as e:
+        logging.error(f"Input file error: {e}")
+        print(f"❌ Input file error: {e}")
+        sys.exit(2)
+    except ValueError as e:
+        logging.error(f"Processing error: {e}")
+        print(f"❌ Processing error: {e}")
+        sys.exit(3)
     except Exception as e:
-        logging.error(f"Filtering failed: {e}", exc_info=True)
-        print(f"❌ Filtering failed: {e}")
-        sys.exit(1)
+        logging.exception("Unexpected error")
+        print(f"❌ Unexpected error: {e}")
+        sys.exit(99)
 
-    if result_series.is_empty():
-        print("ℹ️ No matching values found.")
-        return
+    try:
+        save_output(series, cfg)
+    except Exception as e:
+        print(f"❌ Output error: {e}")
+        sys.exit(4)
 
-    print("\n🔎 Unique values found:")
-    for val in result_series.to_list():
-        print(f" - {val}")
-
-    if args.output:
-        # Infer output format from file extension if possible
-        ext = args.output.split('.')[-1].lower()
-        output_fmt = ext if ext in {"csv", "json", "yaml", "parquet"} else "csv"
-        save_output(result_series, filters, unique_field, args.output, separator, row_format, column_name, output_fmt)
-    else:
-        save = input("\n💾 Save results? (y/n): ").lower().strip()
-        if save in ("y", "yes"):
-            out_path = input("Output file name (without extension): ").strip()
-            output_format = prompt_output_format()
-
-            # Append extension if not present
-            if not out_path.lower().endswith(f".{output_format}"):
-                out_path += f".{output_format}"
-
-            save_output(result_series, filters, unique_field, out_path, separator, row_format, column_name, output_format)
-
-    elapsed = time.time() - start_time
-    mem_used = psutil.Process().memory_info().rss / (1024 * 1024)
-    print(f"\n⏱️ Time taken: {elapsed:.2f}s | 🧠 Memory used: {mem_used:.2f} MB")
-    logging.info(f"Time: {elapsed:.2f}s, Memory: {mem_used:.2f} MB")
+    elapsed = time.time() - start
+    end_mem = get_memory_mb()
+    print(f"⏱ {elapsed:.2f}s | 🧠 memory Δ {end_mem - start_mem:+.1f} MB | ✅ {len(series)} unique values")
+    sys.exit(0)
 
 if __name__ == "__main__":
     main()
