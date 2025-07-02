@@ -246,7 +246,7 @@ Execution logs are automatically saved to the `logs/` directory with timestamps 
 
 ## License
 
-[Add your license information here]
+
 
 ---
 
