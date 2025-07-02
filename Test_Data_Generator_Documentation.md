@@ -1,5 +1,7 @@
 # Test Data Generator Documentation
 
+Test Data Generator tool is for generating synthetic test data (users, products, orders) in CSV/JSON formats, with optional errors for validation testing.
+
 ## CLI Options
 
 ```
@@ -12,21 +14,50 @@ usage: generate_test_data.py [-h] [--output-dir OUTPUT_DIR] [--config-dir CONFIG
 
 Generate test data sets for users, products, and orders with optional error injection.
 
-### Optional Arguments
+## 🔧 Option Descriptions
 
-- `-h, --help` - Show this help message and exit
-- `--output-dir OUTPUT_DIR` - Directory to output generated data files (default: test_data)
-- `--config-dir CONFIG_DIR` - Directory to output config YAML file (default: <output-dir>/configs)
-- `--faker-seed FAKER_SEED` - Random seed for Faker and reproducibility (default: 42)
-- `--inject-errors` - Inject random data errors into the output files
-- `--test-case-mode` - Add explicit corrupt rows and duplicates for test cases (implies --inject-errors)
-- `--error-prob ERROR_PROB` - Probability of injecting an error in each field (default: 0.05)
-- `--duplicate-count DUPLICATE_COUNT` - Number of duplicates to add in test-case-mode (default: 5)
-- `--verbose` - Enable verbose debug logging
-- `--file {users,products,orders,config} [file ...]` - Which data files to generate (default: all)
-- `--users USERS` - Number of user rows to generate (default: 1000)
-- `--products PRODUCTS` - Number of product rows to generate (default: 500)
-- `--orders ORDERS` - Number of order entries to generate (default: 500)
+| Option | Description |
+|--------|-------------|
+| `-h, --help` | Show help message and exit. |
+| `--output-dir OUTPUT_DIR` | Where to save generated data files.<br>**Default:** `test_data`.<br>**Example:** `--output-dir ./mydata` |
+| `--config-dir CONFIG_DIR` | Where to save the config YAML file.<br>**Default:** `<output-dir>/configs`.<br>**Example:** `--config-dir ./configs` |
+| `--faker-seed FAKER_SEED` | Seed value for the Faker library and random to ensure repeatable output.<br>**Default:** `42`.<br>Set a different seed for varied data each time. |
+| `--inject-errors` | Enable random data errors (e.g., bad emails, negative values).<br>Useful for testing how your app handles bad data. |
+| `--test-case-mode` | Adds explicit corrupt rows (e.g., empty fields, strings in numeric columns) and duplicates.<br>⚠️ This implies `--inject-errors`. |
+| `--error-prob ERROR_PROB` | How likely each field will be corrupted.<br>**Range:** 0 to 1. **Default:** 0.05 (5%). |
+| `--duplicate-count DUPLICATE_COUNT` | How many duplicate IDs to add if `--test-case-mode` is on.<br>**Default:** 5. |
+| `--verbose` | Turn on debug logging. Prints more info while running (e.g., when errors are injected). |
+| `--file {users,products,orders,config} [...]` | Select which files to generate. By default, all are created.<br>**Example:** `--file users orders`<br>**Valid values:** users, products, orders, config |
+| `--users USERS` | Number of user rows to generate (**default:** 1000). |
+| `--products PRODUCTS` | Number of product rows to generate (**default:** 500). |
+| `--orders ORDERS` | Number of order entries to generate (**default:** 500). |
+
+## 💡 Examples
+
+### Basic Example – Generate all default data
+```bash
+python TestDataGenerator.py
+```
+
+### Generate only users and products, with 100 each
+```bash
+python TestDataGenerator.py --file users products --users 100 --products 100
+```
+
+### Generate bad data for testing
+```bash
+python TestDataGenerator.py --test-case-mode
+```
+
+### Save output to custom directory
+```bash
+python TestDataGenerator.py --output-dir ./generated_data --config-dir ./generated_data/configs
+```
+
+### Enable debug output (see what's being injected)
+```bash
+python TestDataGenerator.py --verbose --inject-errors
+```
 
 ## Sample CLI Command
 
